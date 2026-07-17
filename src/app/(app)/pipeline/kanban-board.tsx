@@ -80,6 +80,7 @@ export function KanbanBoard({
 
   return (
     <DndContext
+      id="pipeline-board"
       sensors={sensors}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
