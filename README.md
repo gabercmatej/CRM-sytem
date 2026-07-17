@@ -70,7 +70,7 @@ base grounds the chat, the emails, and the proposals.**
 
 ---
 
-## 📸 Screenshots
+## 📸 User interface
 
 > The CRM core below is captured from the real running app on the demo data.
 > The four AI features are captured from their live interfaces in the app.
