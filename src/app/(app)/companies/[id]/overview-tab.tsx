@@ -1,19 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Plus, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Company, Deal } from "@/lib/database.types";
-import {
-  COMPANY_STATUSES,
-  DEAL_STAGES,
-  STAGE_LABELS,
-  formatMoney,
-} from "@/lib/constants";
+import { PIPELINE_STAGES, formatDate, formatMoney } from "@/lib/constants";
 import { createDeal, deleteCompany, deleteDeal, updateCompany } from "../actions";
-import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { StageBadge } from "@/components/stage-badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +19,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+
+const STAGE_ITEMS = PIPELINE_STAGES.map((s) => ({ value: s.value, label: s.label }));
 
 export function OverviewTab({
   company,
@@ -33,19 +38,39 @@ export function OverviewTab({
   deals: Deal[];
 }) {
   const [dealOpen, setDealOpen] = useState(false);
+  const [saving, startSaving] = useTransition();
+
+  const totalValue = deals
+    .filter((d) => d.stage !== "lost")
+    .reduce((s, d) => s + (d.value ?? 0), 0);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+    <div className="grid items-start gap-4 lg:grid-cols-[2fr_1fr]">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Details</CardTitle>
+          <CardTitle className="text-sm">Details</CardTitle>
+          <CardAction>
+            <ConfirmDialog
+              title="Delete this company?"
+              description="Contacts, deals, activities, research and the knowledge base for this company are removed with it. This can’t be undone."
+              confirmLabel="Delete company"
+              onConfirm={() => deleteCompany(company.id)}
+              render={
+                <Button variant="ghost" size="icon-sm" aria-label="Delete company">
+                  <Trash2 className="size-4 text-destructive" />
+                </Button>
+              }
+            />
+          </CardAction>
         </CardHeader>
         <CardContent>
           <form
-            action={async (fd) => {
-              await updateCompany(company.id, fd);
-              toast.success("Company saved");
-            }}
+            action={(fd) =>
+              startSaving(async () => {
+                await updateCompany(company.id, fd);
+                toast.success("Company saved");
+              })
+            }
             className="grid gap-4"
           >
             <div className="grid grid-cols-2 gap-4">
@@ -70,19 +95,19 @@ export function OverviewTab({
                 <Input id="size" name="size" defaultValue={company.size ?? ""} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="status">Status</Label>
-                <select
-                  id="status"
-                  name="status"
-                  defaultValue={company.status}
-                  className="border-input h-9 rounded-md border bg-transparent px-3 text-sm shadow-xs capitalize"
-                >
-                  {COMPANY_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
+                <Label htmlFor="company-stage">Pipeline stage</Label>
+                <Select items={STAGE_ITEMS} name="stage" defaultValue={company.stage}>
+                  <SelectTrigger id="company-stage" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STAGE_ITEMS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid gap-2">
@@ -103,112 +128,140 @@ export function OverviewTab({
                 placeholder="Anything worth remembering about this company…"
               />
             </div>
-            <div className="flex items-center justify-between">
-              <Button type="submit">Save</Button>
-              <Button
-                type="button"
-                variant="ghost"
-                className="text-destructive hover:text-destructive"
-                onClick={() => {
-                  if (confirm("Delete this company and all its data?")) {
-                    deleteCompany(company.id);
-                  }
-                }}
-              >
-                <Trash2 className="size-4" />
-                Delete company
+            <div>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Save changes"}
               </Button>
             </div>
           </form>
         </CardContent>
       </Card>
 
-      <Card className="h-fit">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Deals</CardTitle>
-          <Dialog open={dealOpen} onOpenChange={setDealOpen}>
-            <DialogTrigger
-              render={
-                <Button size="sm" variant="outline">
-                  <Plus className="size-4" /> Add
-                </Button>
-              }
-            />
-            <DialogContent className="sm:max-w-sm">
-              <DialogHeader>
-                <DialogTitle>New deal</DialogTitle>
-              </DialogHeader>
-              <form
-                action={async (fd) => {
-                  await createDeal(company.id, fd);
-                  setDealOpen(false);
-                }}
-                className="grid gap-4"
+      <div className="space-y-4">
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle className="text-sm">
+              Deals
+              {totalValue > 0 ? (
+                <span className="ml-1.5 font-normal text-muted-foreground">
+                  {formatMoney(totalValue)}
+                </span>
+              ) : null}
+            </CardTitle>
+            <CardAction>
+              <Dialog open={dealOpen} onOpenChange={setDealOpen}>
+                <DialogTrigger
+                  render={
+                    <Button size="sm" variant="outline">
+                      <Plus className="size-4" /> Add
+                    </Button>
+                  }
+                />
+                <DialogContent className="sm:max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>New deal</DialogTitle>
+                  </DialogHeader>
+                  <form
+                    action={async (fd) => {
+                      await createDeal(company.id, fd);
+                      setDealOpen(false);
+                    }}
+                    className="grid gap-4"
+                  >
+                    <div className="grid gap-2">
+                      <Label htmlFor="deal-title">Title *</Label>
+                      <Input id="deal-title" name="title" required />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="deal-value">Value (EUR)</Label>
+                        <Input id="deal-value" name="value" type="number" min="0" />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="deal-stage">Stage</Label>
+                        <Select items={STAGE_ITEMS} name="stage" defaultValue="new">
+                          <SelectTrigger id="deal-stage" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {STAGE_ITEMS.map((s) => (
+                              <SelectItem key={s.value} value={s.value}>
+                                {s.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="deal-close">Expected close</Label>
+                      <Input id="deal-close" name="expected_close" type="date" />
+                    </div>
+                    <Button type="submit">Create deal</Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {deals.length === 0 && (
+              <p className="py-2 text-sm text-muted-foreground">
+                No deals yet — add one when there’s money on the table.
+              </p>
+            )}
+            {deals.map((deal) => (
+              <div
+                key={deal.id}
+                className="flex items-start justify-between gap-2 rounded-lg bg-muted/40 p-3"
               >
-                <div className="grid gap-2">
-                  <Label htmlFor="title">Title *</Label>
-                  <Input id="title" name="title" required />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="value">Value (EUR)</Label>
-                    <Input id="value" name="value" type="number" min="0" />
+                <div className="min-w-0 space-y-1.5">
+                  <p className="truncate text-sm font-medium">{deal.title}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StageBadge stage={deal.stage} />
+                    <span className="text-xs font-medium tabular-nums">
+                      {formatMoney(deal.value, deal.currency)}
+                    </span>
+                    {deal.expected_close ? (
+                      <span className="text-xs text-muted-foreground">
+                        closes {formatDate(deal.expected_close)}
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="stage">Stage</Label>
-                    <select
-                      id="stage"
-                      name="stage"
-                      defaultValue="new"
-                      className="border-input h-9 rounded-md border bg-transparent px-3 text-sm shadow-xs"
+                </div>
+                <ConfirmDialog
+                  title="Delete this deal?"
+                  confirmLabel="Delete"
+                  onConfirm={() => deleteDeal(deal.id, company.id)}
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0 text-muted-foreground"
+                      aria-label={`Delete deal “${deal.title}”`}
                     >
-                      {DEAL_STAGES.map((s) => (
-                        <option key={s.value} value={s.value}>
-                          {s.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="expected_close">Expected close</Label>
-                  <Input id="expected_close" name="expected_close" type="date" />
-                </div>
-                <Button type="submit">Create deal</Button>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {deals.length === 0 && (
-            <p className="text-sm text-muted-foreground">No deals yet.</p>
-          )}
-          {deals.map((deal) => (
-            <div
-              key={deal.id}
-              className="flex items-start justify-between gap-2 rounded-md border p-3"
-            >
-              <div className="space-y-1">
-                <p className="text-sm font-medium">{deal.title}</p>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{STAGE_LABELS[deal.stage]}</Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {formatMoney(deal.value, deal.currency)}
-                  </span>
-                </div>
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  }
+                />
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 text-muted-foreground"
-                onClick={() => deleteDeal(deal.id, company.id)}
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+            ))}
+          </CardContent>
+        </Card>
+
+        {company.research_summary ? (
+          <Card size="sm" className="bg-ai/5 ring-ai/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Sparkles className="size-4 text-ai" aria-hidden />
+                AI summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-foreground/90">
+              {company.research_summary}
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -33,6 +33,35 @@ export const ResearchReportSchema = z.object({
 
 export type ResearchReportOutput = z.infer<typeof ResearchReportSchema>;
 
+export const LeadSchema = z.object({
+  name: z.string().describe("The company's legal or common trading name"),
+  domain: z
+    .string()
+    .nullable()
+    .describe("Primary website domain without protocol, e.g. acme.com; null if unknown"),
+  industry: z.string().nullable().describe("Primary industry"),
+  country: z.string().nullable().describe("Headquarters country"),
+  size: z.string().nullable().describe("Employee count or size bracket if known"),
+  description: z
+    .string()
+    .describe("1-2 sentences on what the company does, based on verified facts"),
+  fit_reason: z
+    .string()
+    .describe("Why this company matches the search criteria and would benefit from AI automation"),
+  source_url: z
+    .string()
+    .nullable()
+    .describe("URL of the page that verified this company exists"),
+});
+
+export const LeadListSchema = z.object({
+  leads: z
+    .array(LeadSchema)
+    .describe("Real, verified companies matching the search criteria"),
+});
+
+export type LeadOutput = z.infer<typeof LeadSchema>;
+
 export const EmailDraftSchema = z.object({
   subject: z.string().describe("Email subject line, short and specific"),
   body: z

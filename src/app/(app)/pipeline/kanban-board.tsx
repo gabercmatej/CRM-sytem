@@ -14,56 +14,67 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { toast } from "sonner";
+import { Sparkles } from "lucide-react";
 import type { DealStage } from "@/lib/database.types";
-import { DEAL_STAGES, formatMoney } from "@/lib/constants";
-import { moveDeal } from "../companies/actions";
+import { PIPELINE_STAGES, formatMoney, formatRelative } from "@/lib/constants";
+import { STAGE_DOT_CLASS } from "@/components/stage-badge";
+import { moveCompanyStage } from "../companies/actions";
 import { cn } from "@/lib/utils";
 
-export type BoardDeal = {
+export type BoardCompany = {
   id: string;
-  title: string;
+  name: string;
+  domain: string | null;
+  industry: string | null;
   stage: DealStage;
-  value: number | null;
-  currency: string;
   position: number;
-  companyId: string;
-  companyName: string;
+  /** Summed value of the company's non-lost deals. */
+  dealValue: number;
+  dealCount: number;
+  researched: boolean;
+  lastActivityAt: string | null;
 };
 
-export function KanbanBoard({ initialDeals }: { initialDeals: BoardDeal[] }) {
-  const [deals, setDeals] = useState(initialDeals);
-  const [activeDeal, setActiveDeal] = useState<BoardDeal | null>(null);
+export function KanbanBoard({
+  companies: initial,
+  currency = "EUR",
+}: {
+  companies: BoardCompany[];
+  currency?: string;
+}) {
+  const [companies, setCompanies] = useState(initial);
+  const [active, setActive] = useState<BoardCompany | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   );
 
   function handleDragStart(event: DragStartEvent) {
-    setActiveDeal(deals.find((d) => d.id === event.active.id) ?? null);
+    setActive(companies.find((c) => c.id === event.active.id) ?? null);
   }
 
   async function handleDragEnd(event: DragEndEvent) {
-    setActiveDeal(null);
-    const { active, over } = event;
+    setActive(null);
+    const { active: dragged, over } = event;
     if (!over) return;
 
-    const dealId = String(active.id);
+    const companyId = String(dragged.id);
     const newStage = String(over.id) as DealStage;
-    const deal = deals.find((d) => d.id === dealId);
-    if (!deal || deal.stage === newStage) return;
+    const company = companies.find((c) => c.id === companyId);
+    if (!company || company.stage === newStage) return;
 
-    const previous = deals;
+    const previous = companies;
     const newPosition = Date.now();
-    setDeals((ds) =>
-      ds.map((d) =>
-        d.id === dealId ? { ...d, stage: newStage, position: newPosition } : d
+    setCompanies((cs) =>
+      cs.map((c) =>
+        c.id === companyId ? { ...c, stage: newStage, position: newPosition } : c
       )
     );
 
-    const { error } = await moveDeal(dealId, newStage, newPosition);
+    const { error } = await moveCompanyStage(companyId, newStage, newPosition);
     if (error) {
-      setDeals(previous);
-      toast.error(`Could not move deal: ${error}`);
+      setCompanies(previous);
+      toast.error(`Could not move company: ${error}`);
     }
   }
 
@@ -74,18 +85,19 @@ export function KanbanBoard({ initialDeals }: { initialDeals: BoardDeal[] }) {
       onDragEnd={handleDragEnd}
     >
       <div className="flex gap-3 overflow-x-auto pb-4">
-        {DEAL_STAGES.map((stage) => (
+        {PIPELINE_STAGES.map((stage) => (
           <Column
             key={stage.value}
             stage={stage}
-            deals={deals
-              .filter((d) => d.stage === stage.value)
+            currency={currency}
+            companies={companies
+              .filter((c) => c.stage === stage.value)
               .sort((a, b) => a.position - b.position)}
           />
         ))}
       </div>
-      <DragOverlay>
-        {activeDeal && <DealCard deal={activeDeal} overlay />}
+      <DragOverlay dropAnimation={null}>
+        {active && <CompanyCard company={active} currency={currency} overlay />}
       </DragOverlay>
     </DndContext>
   );
@@ -93,46 +105,68 @@ export function KanbanBoard({ initialDeals }: { initialDeals: BoardDeal[] }) {
 
 function Column({
   stage,
-  deals,
+  companies,
+  currency,
 }: {
-  stage: (typeof DEAL_STAGES)[number];
-  deals: BoardDeal[];
+  stage: (typeof PIPELINE_STAGES)[number];
+  companies: BoardCompany[];
+  currency: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.value });
-  const total = deals.reduce((sum, d) => sum + (d.value ?? 0), 0);
+  // Column value = the summed deal value of every company in the stage.
+  const total = companies.reduce((sum, c) => sum + c.dealValue, 0);
 
   return (
     <div
-      ref={setNodeRef}
-      className={cn(
-        "flex w-64 shrink-0 flex-col rounded-lg border bg-background",
-        isOver && "ring-2 ring-primary/40"
-      )}
+      className="flex w-72 shrink-0 flex-col rounded-xl bg-muted/50"
+      aria-label={`${stage.label} — ${companies.length} companies`}
     >
-      <div className="flex items-center justify-between border-b px-3 py-2">
+      <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5">
         <div className="flex items-center gap-2">
-          <span className={cn("size-2 rounded-full", stage.color)} />
-          <span className="text-sm font-medium">{stage.label}</span>
-          <span className="text-xs text-muted-foreground">{deals.length}</span>
+          <span
+            className={cn("size-2 rounded-full", STAGE_DOT_CLASS[stage.value])}
+            aria-hidden
+          />
+          <span className="text-[13px] font-medium">{stage.label}</span>
+          <span className="rounded-full bg-background px-1.5 text-xs tabular-nums text-muted-foreground ring-1 ring-foreground/5">
+            {companies.length}
+          </span>
         </div>
         {total > 0 && (
-          <span className="text-xs text-muted-foreground">
-            {formatMoney(total)}
+          <span className="text-xs font-medium tabular-nums text-muted-foreground">
+            {formatMoney(total, currency, { compact: true })}
           </span>
         )}
       </div>
-      <div className="flex min-h-24 flex-1 flex-col gap-2 p-2">
-        {deals.map((deal) => (
-          <DraggableCard key={deal.id} deal={deal} />
+      <div
+        ref={setNodeRef}
+        className={cn(
+          "flex min-h-32 flex-1 flex-col gap-2 rounded-b-xl p-2 transition-shadow",
+          isOver && "ring-2 ring-ring/40 ring-inset"
+        )}
+      >
+        {companies.map((company) => (
+          <DraggableCard key={company.id} company={company} currency={currency} />
         ))}
+        {companies.length === 0 && !isOver && (
+          <p className="px-2 py-6 text-center text-xs text-muted-foreground/70">
+            No companies
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
-function DraggableCard({ deal }: { deal: BoardDeal }) {
+function DraggableCard({
+  company,
+  currency,
+}: {
+  company: BoardCompany;
+  currency: string;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: deal.id,
+    id: company.id,
   });
 
   return (
@@ -142,29 +176,59 @@ function DraggableCard({ deal }: { deal: BoardDeal }) {
       {...attributes}
       className={cn(isDragging && "opacity-40")}
     >
-      <DealCard deal={deal} />
+      <CompanyCard company={company} currency={currency} />
     </div>
   );
 }
 
-function DealCard({ deal, overlay }: { deal: BoardDeal; overlay?: boolean }) {
+function CompanyCard({
+  company,
+  currency = "EUR",
+  overlay,
+}: {
+  company: BoardCompany;
+  currency?: string;
+  overlay?: boolean;
+}) {
   return (
     <div
       className={cn(
-        "cursor-grab rounded-md border bg-card p-3 shadow-xs",
-        overlay && "rotate-2 shadow-lg"
+        "cursor-grab rounded-lg bg-card p-3 ring-1 ring-foreground/10",
+        !overlay && "hover-lift",
+        overlay && "rotate-1 shadow-lg"
       )}
     >
-      <p className="text-sm font-medium leading-tight">{deal.title}</p>
-      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+      <div className="flex items-start justify-between gap-2">
         <Link
-          href={`/companies/${deal.companyId}`}
-          className="truncate hover:text-foreground hover:underline"
+          href={`/companies/${company.id}`}
+          className="min-w-0 text-sm leading-tight font-medium hover:underline"
           onPointerDown={(e) => e.stopPropagation()}
         >
-          {deal.companyName}
+          {company.name}
         </Link>
-        <span className="shrink-0">{formatMoney(deal.value, deal.currency)}</span>
+        {company.researched && (
+          <Sparkles className="size-3.5 shrink-0 text-ai" aria-label="Researched" />
+        )}
+      </div>
+      {company.industry ? (
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {company.industry}
+        </p>
+      ) : null}
+      <div className="mt-2.5 flex items-center justify-between gap-2 text-xs">
+        <span className="text-muted-foreground">
+          {company.lastActivityAt ? formatRelative(company.lastActivityAt) : "No activity"}
+        </span>
+        {company.dealValue > 0 ? (
+          <span className="font-medium tabular-nums">
+            {formatMoney(company.dealValue, currency)}
+            {company.dealCount > 1 ? (
+              <span className="ml-1 font-normal text-muted-foreground">
+                · {company.dealCount} deals
+              </span>
+            ) : null}
+          </span>
+        ) : null}
       </div>
     </div>
   );

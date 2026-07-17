@@ -1,20 +1,13 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, Sparkles } from "lucide-react";
+import { Building2 } from "lucide-react";
 import { getAuthContext } from "@/lib/supabase/server";
-import { formatDate } from "@/lib/constants";
-import { Badge } from "@/components/ui/badge";
+import { getWorkspaceSettings } from "@/lib/workspace-settings";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { NewCompanyDialog } from "./new-company-dialog";
 import { loadDemoData } from "./actions";
+import { NewCompanyDialog } from "./new-company-dialog";
+import { CompaniesTable, type CompanyRow } from "./companies-table";
 
 export const metadata = { title: "Companies" };
 
@@ -22,86 +15,78 @@ export default async function CompaniesPage() {
   const auth = await getAuthContext();
   if (!auth) redirect("/login");
 
-  const { data: companies } = await auth.supabase
-    .from("companies")
-    .select("id, name, domain, industry, country, status, last_researched_at")
-    .order("created_at", { ascending: false });
+  const [companiesRes, dealsRes, contactsRes, activitiesRes, settings] = await Promise.all([
+    auth.supabase
+      .from("companies")
+      .select("id, name, domain, industry, country, stage, created_at")
+      .order("created_at", { ascending: false }),
+    auth.supabase.from("deals").select("company_id, value, stage"),
+    auth.supabase
+      .from("contacts")
+      .select("company_id, name, created_at")
+      .order("created_at", { ascending: true }),
+    auth.supabase
+      .from("activities")
+      .select("company_id, created_at")
+      .order("created_at", { ascending: false })
+      .limit(2000),
+    getWorkspaceSettings(auth.supabase, auth.workspaceId),
+  ]);
+
+  const revenue = new Map<string, number>();
+  for (const d of dealsRes.data ?? []) {
+    if (d.stage === "lost") continue;
+    revenue.set(d.company_id, (revenue.get(d.company_id) ?? 0) + (d.value ?? 0));
+  }
+
+  const primaryContact = new Map<string, string>();
+  for (const c of contactsRes.data ?? []) {
+    if (!primaryContact.has(c.company_id)) primaryContact.set(c.company_id, c.name);
+  }
+
+  const lastActivity = new Map<string, string>();
+  for (const a of activitiesRes.data ?? []) {
+    if (!lastActivity.has(a.company_id)) lastActivity.set(a.company_id, a.created_at);
+  }
+
+  const rows: CompanyRow[] = (companiesRes.data ?? []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    domain: c.domain,
+    industry: c.industry,
+    country: c.country,
+    stage: c.stage,
+    created_at: c.created_at,
+    revenue: revenue.get(c.id) ?? 0,
+    contactName: primaryContact.get(c.id) ?? null,
+    lastActivityAt: lastActivity.get(c.id) ?? null,
+  }));
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Companies</h1>
-        <NewCompanyDialog />
-      </div>
-
-      {companies && companies.length > 0 ? (
-        <div className="rounded-lg border bg-background">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Industry</TableHead>
-                <TableHead>Country</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Researched</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {companies.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell>
-                    <Link
-                      href={`/companies/${c.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {c.name}
-                    </Link>
-                    {c.domain && (
-                      <div className="text-xs text-muted-foreground">
-                        {c.domain}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>{c.industry ?? "—"}</TableCell>
-                  <TableCell>{c.country ?? "—"}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="capitalize">
-                      {c.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {c.last_researched_at ? (
-                      <span className="inline-flex items-center gap-1">
-                        <Sparkles className="size-3 text-primary" />
-                        {formatDate(c.last_researched_at)}
-                      </span>
-                    ) : (
-                      "Not yet"
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+    <div className="mx-auto w-full max-w-6xl space-y-6">
+      <PageHeader
+        title="Companies"
+        description="Every company in your workspace — each one lives on the pipeline from day one."
+        actions={rows.length > 0 ? <NewCompanyDialog /> : undefined}
+      />
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={Building2}
+          title="No companies yet"
+          description="Add your first company to start researching, reaching out and tracking deals — or load demo data to explore."
+          action={
+            <>
+              <NewCompanyDialog />
+              <form action={loadDemoData}>
+                <Button variant="outline" type="submit">
+                  Load demo data
+                </Button>
+              </form>
+            </>
+          }
+        />
       ) : (
-        <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed bg-background py-16 text-center">
-          <Building2 className="size-10 text-muted-foreground" />
-          <div>
-            <p className="font-medium">No companies yet</p>
-            <p className="text-sm text-muted-foreground">
-              Add your first company, or load demo data to explore.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <NewCompanyDialog />
-            <form action={loadDemoData}>
-              <Button variant="outline" type="submit">
-                Load demo data
-              </Button>
-            </form>
-          </div>
-        </div>
+        <CompaniesTable rows={rows} currency={settings.currency} />
       )}
     </div>
   );

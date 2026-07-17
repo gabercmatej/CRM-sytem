@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import type { Company, DocumentSource, KbDocument } from "@/lib/database.types";
 import { formatDate } from "@/lib/constants";
 import { deleteDocument } from "../actions";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,7 +36,8 @@ const SOURCE_ICONS: Record<DocumentSource, React.ElementType> = {
   research_report: Sparkles,
 };
 
-export function KnowledgeTab({
+/** Knowledge base list + ingestion actions (crawl / PDF / note). */
+export function KnowledgeSection({
   company,
   documents,
 }: {
@@ -119,11 +121,16 @@ export function KnowledgeTab({
   }
 
   return (
-    <div className="space-y-4">
+    <section aria-label="Knowledge base" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          Everything here is searchable by the company chat and email generator.
-        </p>
+        <h2 className="text-sm font-semibold">
+          Knowledge base
+          {documents.length > 0 ? (
+            <span className="ml-1.5 font-normal text-muted-foreground">
+              {documents.length} {documents.length === 1 ? "source" : "sources"}
+            </span>
+          ) : null}
+        </h2>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={crawlWebsite} disabled={!!busy}>
             <Globe className="size-4" /> Crawl website
@@ -160,12 +167,12 @@ export function KnowledgeTab({
               </DialogHeader>
               <form action={addNote} className="grid gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="title">Title</Label>
-                  <Input id="title" name="title" placeholder="Meeting notes 15 Jul" />
+                  <Label htmlFor="kb-note-title">Title</Label>
+                  <Input id="kb-note-title" name="title" placeholder="Meeting notes 15 Jul" />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="content">Content *</Label>
-                  <Textarea id="content" name="content" rows={8} required />
+                  <Label htmlFor="kb-note-content">Content *</Label>
+                  <Textarea id="kb-note-content" name="content" rows={8} required />
                 </div>
                 <Button type="submit">Save note</Button>
               </form>
@@ -175,64 +182,78 @@ export function KnowledgeTab({
       </div>
 
       {busy && (
-        <div className="flex items-center gap-2 rounded-md border bg-background p-3 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> {busy}
+        <div
+          className="flex items-center gap-2 rounded-lg bg-muted/60 p-3 text-sm text-muted-foreground"
+          role="status"
+        >
+          <Loader2 className="size-4 animate-spin" aria-hidden /> {busy}
         </div>
       )}
 
       {documents.length === 0 && !busy ? (
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed bg-background py-16 text-center">
-          <FileText className="size-10 text-muted-foreground" />
-          <div>
-            <p className="font-medium">Knowledge base is empty</p>
-            <p className="mx-auto max-w-md text-sm text-muted-foreground">
-              Crawl the company website, upload PDFs (offers, brochures) or add
-              notes. Research reports land here automatically.
-            </p>
-          </div>
+        <div className="rounded-xl border border-dashed px-4 py-8 text-center">
+          <p className="text-sm font-medium">Knowledge base is empty</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+            Crawl the website, upload PDFs or add notes — everything becomes
+            searchable for chat, emails and proposals. Research reports land here
+            automatically.
+          </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <ul className="space-y-1.5">
           {documents.map((doc) => {
             const Icon = SOURCE_ICONS[doc.source] ?? FileText;
             return (
-              <div
+              <li
                 key={doc.id}
-                className="flex items-center gap-3 rounded-lg border bg-background p-3"
+                className="flex items-center gap-3 rounded-lg bg-card p-2.5 ring-1 ring-foreground/10"
               >
-                <Icon className="size-4 shrink-0 text-muted-foreground" />
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted">
+                  <Icon
+                    className={
+                      doc.source === "research_report"
+                        ? "size-3.5 text-ai"
+                        : "size-3.5 text-muted-foreground"
+                    }
+                    aria-hidden
+                  />
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{doc.title}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="truncate text-xs text-muted-foreground">
                     {doc.source.replace("_", " ")} · {formatDate(doc.created_at)}
                     {doc.error ? ` · ${doc.error}` : ""}
                   </p>
                 </div>
-                <Badge
-                  variant={
-                    doc.status === "ready"
-                      ? "secondary"
-                      : doc.status === "error"
-                        ? "destructive"
-                        : "outline"
+                {doc.status !== "ready" && (
+                  <Badge
+                    variant={doc.status === "error" ? "destructive" : "outline"}
+                    className="capitalize"
+                  >
+                    {doc.status}
+                  </Badge>
+                )}
+                <ConfirmDialog
+                  title="Remove this source?"
+                  description="Its content will no longer ground chat answers, emails or proposals."
+                  confirmLabel="Remove"
+                  onConfirm={() => deleteDocument(doc.id, company.id)}
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                      aria-label={`Remove ${doc.title}`}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
                   }
-                  className="capitalize"
-                >
-                  {doc.status}
-                </Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 text-muted-foreground"
-                  onClick={() => deleteDocument(doc.id, company.id)}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
+                />
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
-    </div>
+    </section>
   );
 }

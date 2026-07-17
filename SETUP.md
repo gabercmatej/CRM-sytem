@@ -5,7 +5,7 @@ Everything is built — you need ~15 minutes to connect the services. All of the
 ## 1. Supabase (database + auth) — required
 
 1. Go to [supabase.com](https://supabase.com) → **New project** (free tier is fine). Pick a strong database password and a region near you (e.g. `eu-central-1`).
-2. When the project is ready, open **SQL Editor** → **New query**, paste the entire contents of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned".
+2. When the project is ready, open **SQL Editor** → **New query**, paste the entire contents of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run** ("Success. No rows returned"). Then open a second **New query** and run [`supabase/migrations/0002_company_pipeline_leads_proposals.sql`](supabase/migrations/0002_company_pipeline_leads_proposals.sql) the same way. Run migrations in order; each new file must be applied after the ones before it.
 3. Open **Project Settings → API** and copy:
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon public` key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -66,7 +66,8 @@ Research runs stream for up to 5 minutes; this is configured via `maxDuration = 
 
 ## Troubleshooting
 
-- **"Could not start research run" / empty pages** → check the Supabase keys and that the migration ran.
+- **A page errors with "column … does not exist"** → a migration hasn't been applied. Re-run the SQL files in `supabase/migrations/` in order (see step 1.2).
+- **"Could not start research run" / empty pages** → check the Supabase keys and that the migrations ran.
 - **Signup says "Check your email"** → email confirmation is on; either confirm via the email or disable it (step 1.4).
 - **Research fails immediately** → `ANTHROPIC_API_KEY` missing or out of credit.
 - **"Crawling unavailable"** → `FIRECRAWL_API_KEY` missing; the agent falls back to web search + page fetch.

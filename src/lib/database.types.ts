@@ -1,4 +1,4 @@
-// Hand-written to match supabase/migrations/0001_init.sql.
+// Hand-written to match supabase/migrations/0001_init.sql + 0002_company_pipeline_leads_proposals.sql.
 // After linking the Supabase CLI you can regenerate with:
 //   npx supabase gen types typescript --linked > src/lib/database.types.ts
 
@@ -24,16 +24,26 @@ export type ActivityType =
 export type DocumentSource = "website" | "pdf" | "manual" | "research_report";
 export type DocumentStatus = "pending" | "processing" | "ready" | "error";
 export type ResearchStatus = "running" | "completed" | "error";
+export type LeadStatus = "suggested" | "added" | "dismissed";
+export type ProposalStatus = "draft" | "sent" | "accepted" | "declined";
 
 type Timestamps = {
   created_at: string;
   updated_at: string;
 };
 
+/** User-tunable workspace preferences (workspaces.settings jsonb). */
+export type WorkspaceSettings = {
+  currency?: string;
+  email_language?: string;
+  follow_up_days?: number;
+};
+
 export type Workspace = {
   id: string;
   name: string;
   slug: string;
+  settings: WorkspaceSettings;
 } & Timestamps;
 
 export type WorkspaceMember = {
@@ -53,7 +63,11 @@ export type Company = {
   size: string | null;
   country: string | null;
   linkedin_url: string | null;
+  /** @deprecated superseded by `stage`; kept in the DB for compatibility. */
   status: string;
+  stage: DealStage;
+  stage_position: number;
+  is_demo: boolean;
   notes: string | null;
   research_summary: string | null;
   last_researched_at: string | null;
@@ -68,6 +82,7 @@ export type Contact = {
   email: string | null;
   phone: string | null;
   linkedin_url: string | null;
+  notes: string | null;
 } & Timestamps;
 
 export type Deal = {
@@ -149,6 +164,54 @@ export type ChatMessage = {
   created_at: string;
 };
 
+export type Lead = {
+  id: string;
+  workspace_id: string;
+  company_id: string | null;
+  name: string;
+  domain: string | null;
+  industry: string | null;
+  country: string | null;
+  size: string | null;
+  description: string | null;
+  fit_reason: string | null;
+  source_url: string | null;
+  search_query: string | null;
+  status: LeadStatus;
+  is_demo: boolean;
+  created_at: string;
+};
+
+export type EmailDraft = {
+  id: string;
+  workspace_id: string;
+  company_id: string;
+  contact_id: string | null;
+  subject: string;
+  body: string;
+  goal: string;
+  tone: string;
+  language: string;
+  instructions: string | null;
+  status: "draft" | "sent";
+} & Timestamps;
+
+/** One editable section of a proposal (stored in proposals.content jsonb). */
+export type ProposalSection = {
+  id: string;
+  title: string;
+  body: string;
+};
+
+export type Proposal = {
+  id: string;
+  workspace_id: string;
+  company_id: string;
+  title: string;
+  status: ProposalStatus;
+  content: ProposalSection[];
+} & Timestamps;
+
 /** Structured output of the AI Research Agent (see src/lib/ai/schemas.ts). */
 export type ResearchReport = {
   industry: string;
@@ -163,9 +226,15 @@ export type ResearchReport = {
   recommended_outreach_angle: string;
 };
 
-type TableDef<Row, Required extends keyof Row, Generated extends keyof Row> = {
+/**
+ * `Generated` columns have DB defaults; like the real generated Supabase
+ * types they stay optional on Insert (you may still supply them, e.g. demo
+ * data with historical timestamps).
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type TableDef<Row, Required extends keyof Row, _Generated extends keyof Row> = {
   Row: Row;
-  Insert: Pick<Row, Required> & Partial<Omit<Row, Required | Generated>>;
+  Insert: Pick<Row, Required> & Partial<Omit<Row, Required>>;
   Update: Partial<Omit<Row, "id">>;
   Relationships: [];
 };
@@ -224,6 +293,17 @@ export type Database = {
         "workspace_id" | "conversation_id" | "role" | "content",
         "id" | "created_at"
       >;
+      leads: TableDef<Lead, "workspace_id" | "name", "id" | "created_at">;
+      email_drafts: TableDef<
+        EmailDraft,
+        "workspace_id" | "company_id",
+        "id" | "created_at" | "updated_at"
+      >;
+      proposals: TableDef<
+        Proposal,
+        "workspace_id" | "company_id",
+        "id" | "created_at" | "updated_at"
+      >;
     };
     Views: Record<string, never>;
     Functions: {
@@ -249,6 +329,8 @@ export type Database = {
       document_source: DocumentSource;
       document_status: DocumentStatus;
       research_status: ResearchStatus;
+      lead_status: LeadStatus;
+      proposal_status: ProposalStatus;
     };
     CompositeTypes: Record<string, never>;
   };
