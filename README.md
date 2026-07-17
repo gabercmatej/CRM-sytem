@@ -1,4 +1,4 @@
-# Northbound CRM — an AI-native CRM I built for my own agency
+# AI-native CRM I built for my own agency
 
 I built this project as the CRM system for my own future company — a sales
 platform for a small AI agency that doesn't just *track* clients, but actively
