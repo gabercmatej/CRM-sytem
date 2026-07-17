@@ -15,7 +15,7 @@ I'll be using it for my own business.
 
 ## 🔗 Live demo
 
-**[→ Open the live demo](https://YOUR-VERCEL-URL.vercel.app)**  ·  sign in with the shared demo account:
+**[→ Open the live demo](https://crm-sytem.vercel.app)**  ·  sign in with the shared demo account:
 
 | | |
 |---|---|
