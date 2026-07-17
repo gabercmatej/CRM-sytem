@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/supabase/server";
 import { signout } from "@/app/(auth)/actions";
+import { DEMO_EMAIL } from "@/lib/demo/data";
+import { ensureDemoSeeded } from "@/lib/demo/seed";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SearchCommand } from "@/components/search-command";
 
@@ -20,6 +22,12 @@ export default async function AppLayout({
       .single(),
     auth.supabase.auth.getUser(),
   ]);
+
+  // Shared public demo: if a visitor emptied it, restore the dataset so the
+  // next person always lands on a fully populated demo.
+  if (userData.user?.email === DEMO_EMAIL) {
+    await ensureDemoSeeded(auth.supabase, auth.workspaceId);
+  }
 
   return (
     <div className="min-h-screen w-full">

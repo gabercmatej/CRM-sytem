@@ -3,6 +3,7 @@ import { Check, X } from "lucide-react";
 import { getAuthContext } from "@/lib/supabase/server";
 import { researchCostUsd } from "@/lib/constants";
 import { resolveWorkspaceSettings } from "@/lib/workspace-settings";
+import { DEMO_EMAIL } from "@/lib/demo/data";
 import { PageHeader } from "@/components/page-header";
 import {
   updateProfile,
@@ -54,6 +55,7 @@ export default async function SettingsPage() {
     (user?.user_metadata?.display_name as string | undefined) ?? "";
   const settings = resolveWorkspaceSettings(workspace?.settings);
   const hasDemoData = (demoRes.count ?? 0) > 0;
+  const isDemoAccount = user?.email === DEMO_EMAIL;
 
   const inputTokens = (runs ?? []).reduce((s, r) => s + r.input_tokens, 0);
   const outputTokens = (runs ?? []).reduce((s, r) => s + r.output_tokens, 0);
@@ -225,7 +227,7 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      <DemoDataCard hasDemoData={hasDemoData} />
+      <DemoDataCard hasDemoData={hasDemoData} isDemoAccount={isDemoAccount} />
     </div>
   );
 }
