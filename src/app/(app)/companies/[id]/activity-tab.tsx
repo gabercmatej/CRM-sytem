@@ -128,6 +128,7 @@ export function ActivityTab({
                   <span
                     className="shrink-0 text-xs text-muted-foreground"
                     title={formatDateTime(a.created_at)}
+                    suppressHydrationWarning
                   >
                     {formatRelative(a.created_at)}
                   </span>

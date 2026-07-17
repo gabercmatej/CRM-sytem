@@ -217,7 +217,7 @@ function CompanyCard({
         </p>
       ) : null}
       <div className="mt-2.5 flex items-center justify-between gap-2 text-xs">
-        <span className="text-muted-foreground">
+        <span className="text-muted-foreground" suppressHydrationWarning>
           {company.lastActivityAt ? formatRelative(company.lastActivityAt) : "No activity"}
         </span>
         {company.dealValue > 0 ? (

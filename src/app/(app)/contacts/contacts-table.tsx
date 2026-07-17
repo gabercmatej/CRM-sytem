@@ -185,7 +185,9 @@ export function ContactsTable({ rows }: { rows: ContactRow[] }) {
                     )}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground md:table-cell">
-                    {r.lastInteractionAt ? formatRelative(r.lastInteractionAt) : "—"}
+                    <span suppressHydrationWarning>
+                      {r.lastInteractionAt ? formatRelative(r.lastInteractionAt) : "—"}
+                    </span>
                   </TableCell>
                 </TableRow>
               ))}

@@ -205,7 +205,7 @@ export function ProposalWorkspace({
               <Badge variant={STATUS_BADGE[p.status]} className="capitalize">
                 {p.status}
               </Badge>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground" suppressHydrationWarning>
                 {formatRelative(p.updated_at)}
               </span>
             </button>

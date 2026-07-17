@@ -283,7 +283,9 @@ export function CompaniesTable({
                     {formatDate(r.created_at)}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground md:table-cell">
-                    {r.lastActivityAt ? formatRelative(r.lastActivityAt) : "—"}
+                    <span suppressHydrationWarning>
+                      {r.lastActivityAt ? formatRelative(r.lastActivityAt) : "—"}
+                    </span>
                   </TableCell>
                 </TableRow>
               ))}

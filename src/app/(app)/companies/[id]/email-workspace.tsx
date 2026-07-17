@@ -345,7 +345,7 @@ export function EmailWorkspace({
                         <p className="truncate text-sm font-medium">
                           {d.subject || "(no subject)"}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground" suppressHydrationWarning>
                           {formatRelative(d.updated_at)}
                         </p>
                       </div>
